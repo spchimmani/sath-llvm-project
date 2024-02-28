@@ -10,40 +10,38 @@
 //
 //===----------------------------------------------------------------------===//
 #include "tsan_report.h"
-#include "tsan_platform.h"
-#include "tsan_rtl.h"
+
 #include "sanitizer_common/sanitizer_file.h"
 #include "sanitizer_common/sanitizer_placement_new.h"
 #include "sanitizer_common/sanitizer_report_decorator.h"
 #include "sanitizer_common/sanitizer_stacktrace_printer.h"
+#include "tsan_platform.h"
+#include "tsan_rtl.h"
 
 namespace __tsan {
 
-class Decorator: public __sanitizer::SanitizerCommonDecorator {
+class Decorator : public __sanitizer::SanitizerCommonDecorator {
  public:
-  Decorator() : SanitizerCommonDecorator() { }
-  const char *Access()     { return Blue(); }
-  const char *ThreadDescription()    { return Cyan(); }
-  const char *Location()   { return Green(); }
-  const char *Sleep()   { return Yellow(); }
-  const char *Mutex()   { return Magenta(); }
+  Decorator() : SanitizerCommonDecorator() {}
+  const char *Access() { return Blue(); }
+  const char *ThreadDescription() { return Cyan(); }
+  const char *Location() { return Green(); }
+  const char *Sleep() { return Yellow(); }
+  const char *Mutex() { return Magenta(); }
 };
 
 ReportDesc::ReportDesc()
-    : tag(kExternalTagNone)
-    , stacks()
-    , mops()
-    , locs()
-    , mutexes()
-    , threads()
-    , unique_tids()
-    , sleep()
-    , count() {
-}
+    : tag(kExternalTagNone),
+      stacks(),
+      mops(),
+      locs(),
+      mutexes(),
+      threads(),
+      unique_tids(),
+      sleep(),
+      count() {}
 
-ReportMop::ReportMop()
-    : mset() {
-}
+ReportMop::ReportMop() : mset() {}
 
 ReportDesc::~ReportDesc() {
   // FIXME(dvyukov): it must be leaking a lot of memory.
@@ -117,7 +115,7 @@ void PrintStack(const ReportStack *ent) {
   Printf("\n");
 }
 
-static void PrintMutexSet(Vector<ReportMopMutex> const& mset) {
+static void PrintMutexSet(Vector<ReportMopMutex> const &mset) {
   for (uptr i = 0; i < mset.Size(); i++) {
     if (i == 0)
       Printf(" (mutexes:");
@@ -129,9 +127,10 @@ static void PrintMutexSet(Vector<ReportMopMutex> const& mset) {
 
 static const char *MopDesc(bool first, bool write, bool atomic) {
   return atomic ? (first ? (write ? "Atomic write" : "Atomic read")
-                : (write ? "Previous atomic write" : "Previous atomic read"))
+                         : (write ? "Previous atomic write"
+                                  : "Previous atomic read"))
                 : (first ? (write ? "Write" : "Read")
-                : (write ? "Previous write" : "Previous read"));
+                         : (write ? "Previous write" : "Previous read"));
 }
 
 static const char *ExternalMopDesc(bool first, bool write) {
@@ -150,10 +149,9 @@ static void PrintMop(const ReportMop *mop, bool first) {
   } else {
     const char *object_type = GetObjectTypeFromTag(mop->external_tag);
     if (object_type == nullptr)
-        object_type = "external object";
-    Printf("  %s access of %s at %p by %s",
-           ExternalMopDesc(first, mop->write), object_type,
-           (void *)mop->addr, thread_name(thrbuf, mop->tid));
+      object_type = "external object";
+    Printf("  %s access of %s at %p by %s", ExternalMopDesc(first, mop->write),
+           object_type, (void *)mop->addr, thread_name(thrbuf, mop->tid));
   }
   PrintMutexSet(mop->mset);
   Printf(":\n");
@@ -284,7 +282,7 @@ void PrintReport(const ReportDesc *rep) {
   Printf("==================\n");
   const char *rep_typ_str = ReportTypeString(rep->typ, rep->tag);
   Printf("%s", d.Warning());
-  Printf("WARNING: ThreadSanitizer: %s (pid=%d)\n", rep_typ_str,
+  Printf("WARNING: Sath@TAMU ThreadSanitizer: %s (pid=%d)\n", rep_typ_str,
          (int)internal_getpid());
   Printf("%s", d.Default());
 
@@ -309,16 +307,17 @@ void PrintReport(const ReportDesc *rep) {
       Printf("%s:\n", thread_name(thrbuf, rep->unique_tids[i]));
       Printf("%s", d.Default());
       if (flags()->second_deadlock_stack) {
-        PrintStack(rep->stacks[2*i]);
+        PrintStack(rep->stacks[2 * i]);
         Printf("  Mutex ");
         PrintMutexShort(rep->mutexes[i],
                         " previously acquired by the same thread here:\n");
-        PrintStack(rep->stacks[2*i+1]);
+        PrintStack(rep->stacks[2 * i + 1]);
       } else {
         PrintStack(rep->stacks[i]);
         if (i == 0)
-          Printf("    Hint: use TSAN_OPTIONS=second_deadlock_stack=1 "
-                 "to get more informative warning message\n\n");
+          Printf(
+              "    Hint: use TSAN_OPTIONS=second_deadlock_stack=1 "
+              "to get more informative warning message\n\n");
       }
     }
   } else {
@@ -329,22 +328,18 @@ void PrintReport(const ReportDesc *rep) {
     }
   }
 
-  for (uptr i = 0; i < rep->mops.Size(); i++)
-    PrintMop(rep->mops[i], i == 0);
+  for (uptr i = 0; i < rep->mops.Size(); i++) PrintMop(rep->mops[i], i == 0);
 
   if (rep->sleep)
     PrintSleep(rep->sleep);
 
-  for (uptr i = 0; i < rep->locs.Size(); i++)
-    PrintLocation(rep->locs[i]);
+  for (uptr i = 0; i < rep->locs.Size(); i++) PrintLocation(rep->locs[i]);
 
   if (rep->typ != ReportTypeDeadlock) {
-    for (uptr i = 0; i < rep->mutexes.Size(); i++)
-      PrintMutex(rep->mutexes[i]);
+    for (uptr i = 0; i < rep->mutexes.Size(); i++) PrintMutex(rep->mutexes[i]);
   }
 
-  for (uptr i = 0; i < rep->threads.Size(); i++)
-    PrintThread(rep->threads[i]);
+  for (uptr i = 0; i < rep->threads.Size(); i++) PrintThread(rep->threads[i]);
 
   if (rep->typ == ReportTypeThreadLeak && rep->count > 1)
     Printf("  And %d more similar thread leaks.\n\n", rep->count - 1);
@@ -393,27 +388,27 @@ static void PrintMop(const ReportMop *mop, bool first) {
 
 static void PrintLocation(const ReportLocation *loc) {
   switch (loc->type) {
-  case ReportLocationHeap: {
-    Printf("\n");
-    Printf("Heap block of size %zu at %p allocated by ", loc->heap_chunk_size,
-           reinterpret_cast<void *>(loc->heap_chunk_start));
-    if (loc->tid == kMainGoroutineId)
-      Printf("main goroutine:\n");
-    else
-      Printf("goroutine %d:\n", loc->tid);
-    PrintStack(loc->stack);
-    break;
-  }
-  case ReportLocationGlobal: {
-    Printf("\n");
-    Printf("Global var %s of size %zu at %p declared at %s:%zu\n",
-           loc->global.name, loc->global.size,
-           reinterpret_cast<void *>(loc->global.start), loc->global.file,
-           loc->global.line);
-    break;
-  }
-  default:
-    break;
+    case ReportLocationHeap: {
+      Printf("\n");
+      Printf("Heap block of size %zu at %p allocated by ", loc->heap_chunk_size,
+             reinterpret_cast<void *>(loc->heap_chunk_start));
+      if (loc->tid == kMainGoroutineId)
+        Printf("main goroutine:\n");
+      else
+        Printf("goroutine %d:\n", loc->tid);
+      PrintStack(loc->stack);
+      break;
+    }
+    case ReportLocationGlobal: {
+      Printf("\n");
+      Printf("Global var %s of size %zu at %p declared at %s:%zu\n",
+             loc->global.name, loc->global.size,
+             reinterpret_cast<void *>(loc->global.start), loc->global.file,
+             loc->global.line);
+      break;
+    }
+    default:
+      break;
   }
 }
 
@@ -421,8 +416,8 @@ static void PrintThread(const ReportThread *rt) {
   if (rt->id == kMainGoroutineId)
     return;
   Printf("\n");
-  Printf("Goroutine %d (%s) created at:\n",
-    rt->id, rt->running ? "running" : "finished");
+  Printf("Goroutine %d (%s) created at:\n", rt->id,
+         rt->running ? "running" : "finished");
   PrintStack(rt->stack);
 }
 
@@ -430,23 +425,20 @@ void PrintReport(const ReportDesc *rep) {
   Printf("==================\n");
   if (rep->typ == ReportTypeRace) {
     Printf("WARNING: DATA RACE");
-    for (uptr i = 0; i < rep->mops.Size(); i++)
-      PrintMop(rep->mops[i], i == 0);
-    for (uptr i = 0; i < rep->locs.Size(); i++)
-      PrintLocation(rep->locs[i]);
-    for (uptr i = 0; i < rep->threads.Size(); i++)
-      PrintThread(rep->threads[i]);
+    for (uptr i = 0; i < rep->mops.Size(); i++) PrintMop(rep->mops[i], i == 0);
+    for (uptr i = 0; i < rep->locs.Size(); i++) PrintLocation(rep->locs[i]);
+    for (uptr i = 0; i < rep->threads.Size(); i++) PrintThread(rep->threads[i]);
   } else if (rep->typ == ReportTypeDeadlock) {
     Printf("WARNING: DEADLOCK\n");
     for (uptr i = 0; i < rep->mutexes.Size(); i++) {
       Printf("Goroutine %d lock mutex %u while holding mutex %u:\n", 999,
              rep->mutexes[i]->id,
              rep->mutexes[(i + 1) % rep->mutexes.Size()]->id);
-      PrintStack(rep->stacks[2*i]);
+      PrintStack(rep->stacks[2 * i]);
       Printf("\n");
       Printf("Mutex %u was previously locked here:\n",
              rep->mutexes[(i + 1) % rep->mutexes.Size()]->id);
-      PrintStack(rep->stacks[2*i + 1]);
+      PrintStack(rep->stacks[2 * i + 1]);
       Printf("\n");
     }
   }
